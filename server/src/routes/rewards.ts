@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import db from '../database';
+import { getDb } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -12,39 +12,40 @@ const BADGES = [
   { id: 'hero', name: 'Samaritan Hero', description: 'Earned 1000 Good Samaritan points', icon: '⭐', pointsRequired: 1000 },
 ];
 
-router.get('/', authenticate, (req: AuthRequest, res: Response): void => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
-  const transactions = db.prepare(
-    'SELECT * FROM reward_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 20'
-  ).all(req.userId) as any[];
+router.get('/', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const db = getDb();
 
-  const itemCount = (db.prepare('SELECT COUNT(*) as count FROM items WHERE user_id = ?').get(req.userId) as any).count;
-  const returnedCount = (db.prepare("SELECT COUNT(*) as count FROM items WHERE user_id = ? AND status = 'returned'").get(req.userId) as any).count;
+  const [userRes, txRes, itemRes, returnedRes] = await Promise.all([
+    db.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [req.userId!] }),
+    db.execute({ sql: 'SELECT * FROM reward_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 20', args: [req.userId!] }),
+    db.execute({ sql: 'SELECT COUNT(*) as count FROM items WHERE user_id = ?', args: [req.userId!] }),
+    db.execute({ sql: "SELECT COUNT(*) as count FROM items WHERE user_id = ? AND status = 'returned'", args: [req.userId!] })
+  ]);
+
+  const user = userRes.rows[0] as any;
+  const points = Number(user.points);
+  const itemCount = Number(itemRes.rows[0].count);
 
   const earnedBadges = BADGES.filter(b => {
     if (b.id === 'guardian') return itemCount >= 5;
-    return user.points >= b.pointsRequired;
+    return points >= b.pointsRequired;
   });
-
   const nextBadge = BADGES.find(b => {
     if (b.id === 'guardian') return itemCount < 5;
-    return user.points < b.pointsRequired;
+    return points < b.pointsRequired;
   });
 
   res.json({
-    points: user.points,
+    points,
     subscription: user.subscription,
     badges: earnedBadges,
     nextBadge: nextBadge || null,
     stats: {
       itemsRegistered: itemCount,
-      itemsReturned: returnedCount
+      itemsReturned: Number(returnedRes.rows[0].count)
     },
-    transactions: transactions.map(t => ({
-      id: t.id,
-      amount: t.amount,
-      reason: t.reason,
-      createdAt: t.created_at
+    transactions: txRes.rows.map((t: any) => ({
+      id: t.id, amount: Number(t.amount), reason: t.reason, createdAt: t.created_at
     }))
   });
 });
