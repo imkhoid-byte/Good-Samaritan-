@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
 import Landing from './pages/Landing';
@@ -10,6 +10,10 @@ import RegisterItem from './pages/RegisterItem';
 import ItemDetail from './pages/ItemDetail';
 import FoundItem from './pages/FoundItem';
 import Rewards from './pages/Rewards';
+import TagPage from './pages/TagPage';
+import Venues from './pages/Venues';
+import VenueDashboard from './pages/VenueDashboard';
+import PrintTags from './pages/PrintTags';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -29,6 +33,7 @@ function AppRoutes() {
       {/* Public */}
       <Route path="/" element={<Landing />} />
       <Route path="/found/:id" element={<FoundItem />} />
+      <Route path="/t/:code" element={<TagPage />} />
       <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
       <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
 
@@ -37,6 +42,9 @@ function AppRoutes() {
       <Route path="/items/new" element={<PrivateRoute><RegisterItem /></PrivateRoute>} />
       <Route path="/items/:id" element={<PrivateRoute><ItemDetail /></PrivateRoute>} />
       <Route path="/rewards" element={<PrivateRoute><Rewards /></PrivateRoute>} />
+      <Route path="/venues" element={<PrivateRoute><Venues /></PrivateRoute>} />
+      <Route path="/venues/:orgId" element={<PrivateRoute><VenueDashboard /></PrivateRoute>} />
+      <Route path="/venues/:orgId/batches/:batchId/print" element={<PrivateRoute><PrintTags /></PrivateRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -55,12 +63,13 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user } = useAuth();
-  const isFoundPage = window.location.pathname.startsWith('/found/');
+  const { pathname } = useLocation();
+  // Scan landing pages and print sheets stand on their own, without app chrome.
+  const hideNavbar = pathname.startsWith('/found/') || pathname.startsWith('/t/') || pathname.endsWith('/print');
 
   return (
     <div className="min-h-screen">
-      {!isFoundPage && <Navbar />}
+      {!hideNavbar && <Navbar />}
       <AppRoutes />
     </div>
   );

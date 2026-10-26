@@ -6,6 +6,8 @@ import authRoutes from './routes/auth';
 import itemRoutes from './routes/items';
 import messageRoutes from './routes/messages';
 import rewardRoutes from './routes/rewards';
+import orgRoutes from './routes/orgs';
+import tagRoutes from './routes/tags';
 
 dotenv.config();
 
@@ -31,6 +33,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/rewards', rewardRoutes);
+app.use('/api/orgs', orgRoutes);
+app.use('/api/tags', tagRoutes);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'Good Samaritan API' }));
 
 export default app;

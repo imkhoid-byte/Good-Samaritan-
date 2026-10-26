@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
+import { TAG_STATUS } from '../venue';
 
 interface Item {
   id: string;
@@ -12,6 +13,13 @@ interface Item {
   rewardOffered: number;
   createdAt: string;
   unreadCount: number;
+}
+
+interface VenueTag {
+  code: string;
+  status: string;
+  label: string | null;
+  venueName: string;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -31,10 +39,12 @@ export default function Dashboard() {
   const { user, refreshUser } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [venueTags, setVenueTags] = useState<VenueTag[]>([]);
 
   useEffect(() => {
     fetchItems();
     refreshUser();
+    api.get('/api/tags/mine').then(({ data }) => setVenueTags(data)).catch(() => {});
   }, []);
 
   async function fetchItems() {
@@ -101,6 +111,24 @@ export default function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      {/* Venue tags claimed while signed in (coat check, events…) */}
+      {venueTags.filter(t => t.status !== 'returned').length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Checked in at venues</h2>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {venueTags.filter(t => t.status !== 'returned').map(t => (
+              <Link key={t.code} to={`/t/${t.code}`} className="card p-4 flex items-center justify-between gap-3 hover:shadow-md transition-shadow">
+                <span className="min-w-0">
+                  <span className="block font-medium text-gray-900 truncate">{t.label || 'Tagged item'}</span>
+                  <span className="block text-xs text-gray-500 truncate">{t.venueName}</span>
+                </span>
+                <span className={`badge shrink-0 ${TAG_STATUS[t.status]?.color}`}>{TAG_STATUS[t.status]?.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Items list */}
       {loading ? (

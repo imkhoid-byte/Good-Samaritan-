@@ -24,6 +24,21 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   }
 }
 
+// Attaches userId when a valid token is present, but never rejects the request.
+// Used by public tag pages that show more to venue staff.
+export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(authHeader.slice(7), JWT_SECRET) as { userId: string };
+      req.userId = payload.userId;
+    } catch {
+      // Expired or bad token: treat as anonymous
+    }
+  }
+  next();
+}
+
 export function signToken(userId: string): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
 }

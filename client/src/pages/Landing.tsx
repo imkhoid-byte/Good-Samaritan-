@@ -115,6 +115,37 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Venues */}
+      <section className="py-20 px-4 bg-white">
+        <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-10 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 bg-gray-900 text-white rounded-full px-3 py-1 text-xs font-medium mb-4">For venues</div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Coat checks, lost & found, front desks</h2>
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              Print a stack of blank tags. Guests scan their stub once to link it to their phone, with no app and no sign-up.
+              If an item wanders off, whoever finds it scans the tag and it comes straight back to your desk, with the owner already notified.
+            </p>
+            <Link to="/venues" className="btn-primary">Set up your venue</Link>
+          </div>
+          <ol className="space-y-4">
+            {[
+              ['🖨', 'Print tag pairs', 'One half on the coat, the guest keeps the stub. Reusable every night.'],
+              ['📱', 'Guest scans the stub', 'Phone number in, done. Ten seconds.'],
+              ['🙌', 'Anyone who finds it scans', 'One tap: hand it to your staff, or message the owner.'],
+              ['✅', 'Staff scan to return', 'Mark it returned and the tag resets for the next guest.']
+            ].map(([icon, title, desc]) => (
+              <li key={title} className="card p-4 flex gap-4">
+                <span className="text-2xl">{icon}</span>
+                <span>
+                  <span className="block font-semibold text-gray-900">{title}</span>
+                  <span className="block text-sm text-gray-500">{desc}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-20 px-4 bg-green-600 text-center">
         <div className="max-w-xl mx-auto">

@@ -55,6 +55,14 @@ export default function Navbar() {
                 >
                   Rewards
                 </Link>
+                <Link
+                  to="/venues"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname.startsWith('/venues') ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Venues
+                </Link>
                 <div className="ml-2 flex items-center gap-2">
                   <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-sm font-medium">
                     <span>⭐</span>
@@ -125,6 +133,7 @@ export default function Navbar() {
                 <Link to="/dashboard" className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg" onClick={() => setMenuOpen(false)}>Dashboard</Link>
                 <Link to="/items/new" className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg" onClick={() => setMenuOpen(false)}>+ Register Item</Link>
                 <Link to="/rewards" className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg" onClick={() => setMenuOpen(false)}>Rewards</Link>
+                <Link to="/venues" className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg" onClick={() => setMenuOpen(false)}>Venues</Link>
                 <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">Sign out</button>
               </>
             ) : (
