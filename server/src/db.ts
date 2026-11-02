@@ -1,12 +1,32 @@
-import { createClient, Client, InStatement } from '@libsql/client';
+import { createClient as createRemoteClient, Client, InStatement } from '@libsql/client/web';
 
 let _client: Client | null = null;
 
+// True when running as a Netlify Function / AWS Lambda.
+const IS_SERVERLESS = Boolean(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+export class ConfigError extends Error {}
+
 export function getDb(): Client {
   if (!_client) {
-    const url = process.env.TURSO_DATABASE_URL || 'file:data/good_samaritan.db';
-    const authToken = process.env.TURSO_AUTH_TOKEN;
-    _client = createClient({ url, authToken });
+    const url = process.env.TURSO_DATABASE_URL;
+    if (url) {
+      // The web client talks to Turso over HTTP and has no native code, so it
+      // bundles cleanly into serverless functions. The default
+      // '@libsql/client' entry loads a platform-specific binary at import time,
+      // which crashes the function when the binary isn't shipped.
+      _client = createRemoteClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+    } else if (IS_SERVERLESS) {
+      // Serverless filesystems are read-only and wiped between invocations,
+      // so a local SQLite file can't work there.
+      throw new ConfigError('Database not configured: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in your site settings.');
+    } else {
+      // Local development: a SQLite file. Required lazily so the native
+      // binary is only loaded when it is actually used.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createClient } = require('@libsql/client') as typeof import('@libsql/client');
+      _client = createClient({ url: 'file:data/good_samaritan.db' });
+    }
   }
   return _client;
 }
@@ -217,6 +237,12 @@ export async function initDb(): Promise<void> {
     ['premium_since', 'DATETIME']
   ];
   for (const [name, def] of additions) {
-    if (!have.has(name)) await db.execute(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
+    if (have.has(name)) continue;
+    try {
+      await db.execute(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
+    } catch (err: any) {
+      // Two cold starts can race to add the same column; that's fine.
+      if (!/duplicate column/i.test(String(err?.message))) throw err;
+    }
   }
 }
