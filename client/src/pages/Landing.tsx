@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../api';
+import { ImpactStats } from './Community';
 
 const FEATURES = [
   {
@@ -19,17 +21,11 @@ const FEATURES = [
   },
   {
     icon: '🏆',
-    title: 'Earn Rewards',
-    desc: 'Build your Good Samaritan score. Finders and owners both earn points redeemable for exclusive benefits.'
+    title: 'Reward Kindness',
+    desc: 'Every finder report triggers a donation to a charity the finder picks. Members earn points they can donate too.'
   }
 ];
 
-const STATS = [
-  { number: '50K+', label: 'Items Registered' },
-  { number: '12K+', label: 'Items Returned' },
-  { number: '35K+', label: 'Good Samaritans' },
-  { number: '98%', label: 'Success Rate' }
-];
 
 const HOW_IT_WORKS = [
   { step: '1', title: 'Create your account', desc: 'Sign up free in under a minute.' },
@@ -39,6 +35,11 @@ const HOW_IT_WORKS = [
 ];
 
 export default function Landing() {
+  const [stats, setStats] = useState<React.ComponentProps<typeof ImpactStats>['stats'] | null>(null);
+  useEffect(() => {
+    api.get('/api/community/stats').then(r => setStats(r.data)).catch(() => {});
+  }, []);
+
   return (
     <div className="bg-white">
       {/* Hero */}
@@ -68,13 +69,9 @@ export default function Landing() {
 
       {/* Stats */}
       <section className="bg-green-600 py-14">
-        <div className="max-w-4xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-          {STATS.map(s => (
-            <div key={s.label}>
-              <div className="text-3xl font-extrabold text-white">{s.number}</div>
-              <div className="text-green-100 text-sm mt-1">{s.label}</div>
-            </div>
-          ))}
+        <div className="max-w-4xl mx-auto px-4">
+          {stats ? <ImpactStats stats={stats} dark /> : <div className="h-16" />}
+          <p className="text-center text-green-100 text-xs mt-6">Live totals from the Good Samaritan community</p>
         </div>
       </section>
 
@@ -115,8 +112,32 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Venues */}
+      {/* Shop + giving */}
       <section className="py-20 px-4 bg-white">
+        <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-6">
+          <div className="card p-6">
+            <div className="text-4xl mb-3">♻️</div>
+            <h3 className="font-semibold text-gray-900 mb-2">Tags that are kind to the planet</h3>
+            <p className="text-sm text-gray-500 mb-4">Keychain tags from ocean plastic, compostable stickers, cork luggage tags and recycled aluminium pet tags.</p>
+            <Link to="/shop" className="text-sm font-medium text-green-600 hover:underline">Shop tags →</Link>
+          </div>
+          <div className="card p-6">
+            <div className="text-4xl mb-3">💚</div>
+            <h3 className="font-semibold text-gray-900 mb-2">Kindness that gives back</h3>
+            <p className="text-sm text-gray-500 mb-4">Finders pick a charity and we donate on their behalf. Members turn their points into donations too.</p>
+            <Link to="/community" className="text-sm font-medium text-green-600 hover:underline">See stories & charities →</Link>
+          </div>
+          <div className="card p-6">
+            <div className="text-4xl mb-3">⭐</div>
+            <h3 className="font-semibold text-gray-900 mb-2">Premium protection</h3>
+            <p className="text-sm text-gray-500 mb-4">Instant found alerts, anonymous mode, personal loss-prevention tips and 15% off tags.</p>
+            <Link to="/register" className="text-sm font-medium text-green-600 hover:underline">Start free, upgrade anytime →</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Venues */}
+      <section className="py-20 px-4 bg-gray-50">
         <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-10 items-center">
           <div>
             <div className="inline-flex items-center gap-2 bg-gray-900 text-white rounded-full px-3 py-1 text-xs font-medium mb-4">For venues</div>
@@ -164,7 +185,13 @@ export default function Landing() {
             <div className="w-7 h-7 bg-green-600 rounded-md flex items-center justify-center text-white text-xs font-bold">GS</div>
             <span className="text-white font-semibold">Good Samaritan</span>
           </div>
-          <p className="text-sm">© 2024 Good Samaritan QR. Built for a kinder, more responsible world.</p>
+          <nav className="flex gap-5 text-sm">
+            <Link to="/shop" className="hover:text-white">Shop</Link>
+            <Link to="/community" className="hover:text-white">Community</Link>
+            <Link to="/partners" className="hover:text-white">Partners</Link>
+            <Link to="/venues" className="hover:text-white">Venues</Link>
+          </nav>
+          <p className="text-sm">© {new Date().getFullYear()} Good Samaritan QR. Built for a kinder world.</p>
         </div>
       </footer>
     </div>

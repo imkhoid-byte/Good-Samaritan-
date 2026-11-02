@@ -25,16 +25,16 @@ interface RewardsData {
   stats: {
     itemsRegistered: number;
     itemsReturned: number;
+    donatedCents: number;
   };
   transactions: Transaction[];
 }
 
 const PREMIUM_PERKS = [
-  { icon: '🔔', text: 'Real-time push notifications when items are found' },
-  { icon: '🛡️', text: 'Enhanced privacy controls and anonymous mode' },
-  { icon: '📊', text: 'Advanced item tracking & loss prevention insights' },
-  { icon: '🌍', text: 'Priority community support' },
-  { icon: '♻️', text: 'Eco-pledge: 1 tree planted per month' },
+  { icon: '🔔', text: 'Instant email alerts when a finder contacts you' },
+  { icon: '🕶️', text: 'Anonymous mode on scan pages and stories' },
+  { icon: '🧭', text: 'Loss-prevention tips matched to your items' },
+  { icon: '🏷️', text: '15% off eco-friendly tags' },
 ];
 
 export default function Rewards() {
@@ -106,6 +106,14 @@ export default function Rewards() {
                 <div className="text-xs text-gray-400">Items Returned</div>
               </div>
             </div>
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">💚</div>
+              <div>
+                <div className="text-xl font-bold text-gray-900">${(data.stats.donatedCents / 100).toFixed(2)}</div>
+                <div className="text-xs text-gray-400">Donated to charity</div>
+              </div>
+            </div>
+            <Link to="/community" className="block text-sm text-green-600 hover:underline">Donate your points →</Link>
           </div>
         </div>
       </div>
@@ -148,7 +156,7 @@ export default function Rewards() {
               </li>
             ))}
           </ul>
-          <button className="btn-primary w-full">Upgrade to Premium</button>
+          <Link to="/premium" className="btn-primary w-full block text-center">See Premium plans</Link>
         </div>
       )}
 

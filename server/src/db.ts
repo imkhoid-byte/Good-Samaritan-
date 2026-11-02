@@ -149,7 +149,74 @@ export async function initDb(): Promise<void> {
       )`,
       args: []
     },
-    { sql: 'CREATE INDEX IF NOT EXISTS idx_tag_events_tag ON tag_events(tag_code, created_at)', args: [] }
+    { sql: 'CREATE INDEX IF NOT EXISTS idx_tag_events_tag ON tag_events(tag_code, created_at)', args: [] },
+    // Tag shop. Line items are stored as JSON because the catalog is static
+    // and prices are snapshotted at order time.
+    {
+      sql: `CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        items_json TEXT NOT NULL,
+        total_cents INTEGER NOT NULL,
+        ship_name TEXT NOT NULL,
+        ship_address TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'placed',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+      args: []
+    },
+    // Charitable giving. user_id is null for donations made on behalf of an
+    // anonymous finder (the platform's "kindness match").
+    {
+      sql: `CREATE TABLE IF NOT EXISTS donations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        donor_label TEXT NOT NULL,
+        charity_id TEXT NOT NULL,
+        cents INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      args: []
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS stories (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        item_id TEXT,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        hearts INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+      args: []
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS partner_inquiries (
+        id TEXT PRIMARY KEY,
+        org_name TEXT NOT NULL,
+        contact_name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        partner_type TEXT NOT NULL,
+        message TEXT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      args: []
+    }
   ];
   await db.batch(stmts, 'write');
+
+  // Columns added after the first release. SQLite has no ADD COLUMN IF NOT
+  // EXISTS, so check the live schema and only add what is missing.
+  const cols = await db.execute('PRAGMA table_info(users)');
+  const have = new Set(cols.rows.map((r: any) => String(r.name)));
+  const additions: [string, string][] = [
+    ['anonymous_mode', 'INTEGER NOT NULL DEFAULT 0'],
+    ['premium_since', 'DATETIME']
+  ];
+  for (const [name, def] of additions) {
+    if (!have.has(name)) await db.execute(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
+  }
 }

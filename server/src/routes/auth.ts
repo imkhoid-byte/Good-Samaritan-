@@ -108,6 +108,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
     points: Number(user.points),
     subscription: user.subscription,
     avatarColor: user.avatar_color,
+    anonymousMode: Number(user.anonymous_mode) === 1,
     itemCount: Number(itemRes.rows[0].count),
     foundCount: Number(foundRes.rows[0].count),
     unreadMessages: Number(unreadRes.rows[0].count)

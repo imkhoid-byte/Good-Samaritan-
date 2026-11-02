@@ -72,14 +72,15 @@ router.get('/public/:id', async (req: Request, res: Response): Promise<void> => 
   const item = itemRes.rows[0] as any;
   if (!item) { res.status(404).json({ error: 'Item not found' }); return; }
 
-  const ownerRes = await db.execute({ sql: 'SELECT name FROM users WHERE id = ?', args: [item.user_id] });
+  const ownerRes = await db.execute({ sql: 'SELECT name, anonymous_mode FROM users WHERE id = ?', args: [item.user_id] });
   const owner = ownerRes.rows[0] as any;
 
   res.json({
     id: item.id, name: item.name, description: item.description,
     category: item.category, status: item.status,
     rewardOffered: Number(item.reward_offered), rewardNote: item.reward_note,
-    ownerName: owner?.name || 'Unknown', createdAt: item.created_at
+    ownerName: Number(owner?.anonymous_mode) === 1 ? null : String(owner?.name || '').split(' ')[0] || null,
+    createdAt: item.created_at
   });
 });
 

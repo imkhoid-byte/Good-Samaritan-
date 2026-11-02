@@ -159,6 +159,16 @@ export default function ItemDetail() {
             </dl>
           </div>
 
+          {item.status === 'returned' && (
+            <div className="card p-5 bg-green-50 border-green-200">
+              <h3 className="text-sm font-semibold text-green-800">It came home! 🎉</h3>
+              <p className="text-sm text-green-700 mt-1">Thank your Good Samaritan publicly and inspire others.</p>
+              <Link to={`/community?item=${item.id}`} className="inline-block mt-3 text-sm font-medium text-green-700 hover:underline">
+                Share your story (+20 points) →
+              </Link>
+            </div>
+          )}
+
           {/* Status actions */}
           {item.status !== 'returned' && (
             <div className="card p-5">

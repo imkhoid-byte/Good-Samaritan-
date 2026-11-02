@@ -14,6 +14,10 @@ import TagPage from './pages/TagPage';
 import Venues from './pages/Venues';
 import VenueDashboard from './pages/VenueDashboard';
 import PrintTags from './pages/PrintTags';
+import Shop from './pages/Shop';
+import Premium from './pages/Premium';
+import Community from './pages/Community';
+import Partners from './pages/Partners';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -34,6 +38,9 @@ function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/found/:id" element={<FoundItem />} />
       <Route path="/t/:code" element={<TagPage />} />
+      <Route path="/shop" element={<Shop />} />
+      <Route path="/community" element={<Community />} />
+      <Route path="/partners" element={<Partners />} />
       <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
       <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
 
@@ -42,6 +49,7 @@ function AppRoutes() {
       <Route path="/items/new" element={<PrivateRoute><RegisterItem /></PrivateRoute>} />
       <Route path="/items/:id" element={<PrivateRoute><ItemDetail /></PrivateRoute>} />
       <Route path="/rewards" element={<PrivateRoute><Rewards /></PrivateRoute>} />
+      <Route path="/premium" element={<PrivateRoute><Premium /></PrivateRoute>} />
       <Route path="/venues" element={<PrivateRoute><Venues /></PrivateRoute>} />
       <Route path="/venues/:orgId" element={<PrivateRoute><VenueDashboard /></PrivateRoute>} />
       <Route path="/venues/:orgId/batches/:batchId/print" element={<PrivateRoute><PrintTags /></PrivateRoute>} />

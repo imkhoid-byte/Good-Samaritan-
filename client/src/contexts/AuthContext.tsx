@@ -8,6 +8,7 @@ interface User {
   points: number;
   subscription: string;
   avatarColor: string;
+  anonymousMode?: boolean;
   itemCount?: number;
   foundCount?: number;
   unreadMessages?: number;

@@ -15,11 +15,12 @@ const BADGES = [
 router.get('/', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const db = getDb();
 
-  const [userRes, txRes, itemRes, returnedRes] = await Promise.all([
+  const [userRes, txRes, itemRes, returnedRes, donatedRes] = await Promise.all([
     db.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [req.userId!] }),
     db.execute({ sql: 'SELECT * FROM reward_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 20', args: [req.userId!] }),
     db.execute({ sql: 'SELECT COUNT(*) as count FROM items WHERE user_id = ?', args: [req.userId!] }),
-    db.execute({ sql: "SELECT COUNT(*) as count FROM items WHERE user_id = ? AND status = 'returned'", args: [req.userId!] })
+    db.execute({ sql: "SELECT COUNT(*) as count FROM items WHERE user_id = ? AND status = 'returned'", args: [req.userId!] }),
+    db.execute({ sql: 'SELECT COALESCE(SUM(cents), 0) as cents FROM donations WHERE user_id = ?', args: [req.userId!] })
   ]);
 
   const user = userRes.rows[0] as any;
@@ -42,7 +43,8 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response): Promise<v
     nextBadge: nextBadge || null,
     stats: {
       itemsRegistered: itemCount,
-      itemsReturned: Number(returnedRes.rows[0].count)
+      itemsReturned: Number(returnedRes.rows[0].count),
+      donatedCents: Number(donatedRes.rows[0].cents)
     },
     transactions: txRes.rows.map((t: any) => ({
       id: t.id, amount: Number(t.amount), reason: t.reason, createdAt: t.created_at

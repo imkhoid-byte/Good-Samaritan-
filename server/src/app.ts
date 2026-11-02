@@ -8,6 +8,10 @@ import messageRoutes from './routes/messages';
 import rewardRoutes from './routes/rewards';
 import orgRoutes from './routes/orgs';
 import tagRoutes from './routes/tags';
+import shopRoutes from './routes/shop';
+import accountRoutes from './routes/account';
+import communityRoutes from './routes/community';
+import partnerRoutes from './routes/partners';
 
 dotenv.config();
 
@@ -35,6 +39,10 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/orgs', orgRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/shop', shopRoutes);
+app.use('/api/account', accountRoutes);
+app.use('/api/community', communityRoutes);
+app.use('/api/partners', partnerRoutes);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'Good Samaritan API' }));
 
 export default app;

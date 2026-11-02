@@ -10,8 +10,10 @@ interface PublicItem {
   status: string;
   rewardOffered: number;
   rewardNote: string;
-  ownerName: string;
+  ownerName: string | null;
 }
+
+interface Charity { id: string; name: string; icon: string; cause: string }
 
 const CATEGORY_ICONS: Record<string, string> = {
   keys: '🔑', wallet: '👜', bag: '🎒', phone: '📱',
@@ -24,13 +26,16 @@ export default function FoundItem() {
   const [item, setItem] = useState<PublicItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [form, setForm] = useState({ senderName: '', senderEmail: '', content: '' });
+  const [form, setForm] = useState({ senderName: '', senderEmail: '', content: '', charityId: '' });
+  const [charities, setCharities] = useState<Charity[]>([]);
+  const [donation, setDonation] = useState<{ cents: number; charity: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchItem();
+    api.get('/api/community/charities').then(r => setCharities(r.data.charities)).catch(() => {});
   }, [id]);
 
   async function fetchItem() {
@@ -49,7 +54,8 @@ export default function FoundItem() {
     setError('');
     setSending(true);
     try {
-      await api.post(`/api/messages/found/${id}`, form);
+      const { data } = await api.post(`/api/messages/found/${id}`, { ...form, charityId: form.charityId || undefined });
+      setDonation(data.donation);
       setSent(true);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to send message. Please try again.');
@@ -105,7 +111,9 @@ export default function FoundItem() {
               {item.description && (
                 <p className="text-gray-600 text-sm mt-1">{item.description}</p>
               )}
-              <p className="text-sm text-gray-400 mt-2">Registered by <strong className="text-gray-600">{item.ownerName}</strong></p>
+              <p className="text-sm text-gray-400 mt-2">
+                Registered by <strong className="text-gray-600">{item.ownerName || 'a Good Samaritan member'}</strong>
+              </p>
             </div>
           </div>
           {item.rewardOffered > 0 && (
@@ -135,8 +143,15 @@ export default function FoundItem() {
               Thank you for being a Good Samaritan!
             </p>
             <div className="mt-5 bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-xs text-green-700">💚 Your act of kindness contributes to a more trustworthy community.</p>
+              <p className="text-xs text-green-700">
+                {donation
+                  ? `💚 To thank you, we donated $${(donation.cents / 100).toFixed(2)} to ${donation.charity}.`
+                  : '💚 Your act of kindness contributes to a more trustworthy community.'}
+              </p>
             </div>
+            <Link to="/community" className="block mt-5 text-sm text-green-600 hover:underline">
+              See what the community has done together →
+            </Link>
             <Link to="/" className="block mt-5 text-sm text-green-600 hover:underline">
               Learn about Good Samaritan →
             </Link>
@@ -187,6 +202,32 @@ export default function FoundItem() {
                   required
                 />
               </div>
+              {charities.length > 0 && (
+                <fieldset>
+                  <legend className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Pick a charity: we'll donate $1 on your behalf 💚
+                  </legend>
+                  <div className="grid grid-cols-5 gap-2">
+                    {charities.map(c => (
+                      <button
+                        type="button"
+                        key={c.id}
+                        title={`${c.name}: ${c.cause}`}
+                        aria-pressed={form.charityId === c.id}
+                        onClick={() => setForm(f => ({ ...f, charityId: f.charityId === c.id ? '' : c.id }))}
+                        className={`text-2xl rounded-lg py-2 border transition-colors ${
+                          form.charityId === c.id ? 'border-green-500 bg-green-50 ring-2 ring-green-500' : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {c.icon}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1.5 h-4">
+                    {charities.find(c => c.id === form.charityId)?.name || 'Optional'}
+                  </p>
+                </fieldset>
+              )}
               <button type="submit" className="btn-primary w-full" disabled={sending}>
                 {sending ? 'Sending…' : '💌 Send Message to Owner'}
               </button>
