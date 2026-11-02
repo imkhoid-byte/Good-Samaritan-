@@ -1,34 +1,144 @@
-import { createClient as createRemoteClient, Client, InStatement } from '@libsql/client/web';
+import { createClient as createLibsqlRemote } from '@libsql/client/web';
+import type { Client as LibsqlClient } from '@libsql/client';
+import { neon } from '@neondatabase/serverless';
 
-let _client: Client | null = null;
+// One small database interface with three backends, chosen from the environment:
+//
+//   TURSO_DATABASE_URL    → Turso (libSQL over HTTP)
+//   NETLIFY_DATABASE_URL  → Netlify DB (Neon Postgres over HTTP)
+//   neither, locally      → a SQLite file in server/data/
+//
+// Queries are written once in SQLite style (`?` placeholders, CURRENT_TIMESTAMP,
+// datetime('now', '-5 minutes')) and translated for Postgres in toPostgres().
+// Timestamps are stored as UTC text ("YYYY-MM-DD HH:MM:SS") on every backend so
+// the client parses them the same way.
+
+export type InValue = string | number | bigint | boolean | null | undefined;
+export type InStatement = string | { sql: string; args?: InValue[] };
+
+export interface ResultSet {
+  rows: any[];
+  rowsAffected: number;
+}
+
+export interface Db {
+  dialect: 'sqlite' | 'postgres';
+  execute(stmt: InStatement): Promise<ResultSet>;
+  /** Runs every statement in one transaction: all succeed or none do. */
+  batch(stmts: InStatement[], mode?: 'write' | 'read'): Promise<ResultSet[]>;
+}
+
+/** Minimal Postgres driver surface, so tests can plug in a local server. */
+export interface PgDriver {
+  query(text: string, params: unknown[]): Promise<{ rows: any[]; rowCount: number | null }>;
+  transaction(queries: { text: string; params: unknown[] }[]): Promise<{ rows: any[]; rowCount: number | null }[]>;
+}
+
+export class ConfigError extends Error {}
 
 // True when running as a Netlify Function / AWS Lambda.
 const IS_SERVERLESS = Boolean(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-export class ConfigError extends Error {}
+function normalize(stmt: InStatement): { sql: string; args: InValue[] } {
+  return typeof stmt === 'string' ? { sql: stmt, args: [] } : { sql: stmt.sql, args: stmt.args ?? [] };
+}
 
-export function getDb(): Client {
-  if (!_client) {
-    const url = process.env.TURSO_DATABASE_URL;
-    if (url) {
-      // The web client talks to Turso over HTTP and has no native code, so it
-      // bundles cleanly into serverless functions. The default
-      // '@libsql/client' entry loads a platform-specific binary at import time,
-      // which crashes the function when the binary isn't shipped.
-      _client = createRemoteClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
-    } else if (IS_SERVERLESS) {
-      // Serverless filesystems are read-only and wiped between invocations,
-      // so a local SQLite file can't work there.
-      throw new ConfigError('Database not configured: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in your site settings.');
-    } else {
-      // Local development: a SQLite file. Required lazily so the native
-      // binary is only loaded when it is actually used.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { createClient } = require('@libsql/client') as typeof import('@libsql/client');
-      _client = createClient({ url: 'file:data/good_samaritan.db' });
-    }
+const PG_NOW = "to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')";
+
+export function toPostgres(sql: string): string {
+  const translated = sql
+    .replace(/datetime\('now',\s*'(-?\d+) (seconds?|minutes?|hours?|days?)'\)/gi,
+      (_m, n, unit) => `to_char((now() at time zone 'utc') + interval '${n} ${unit}', 'YYYY-MM-DD HH24:MI:SS')`)
+    .replace(/\bCURRENT_TIMESTAMP\b/g, PG_NOW)
+    .replace(/\bDATETIME\b/g, 'TEXT')
+    // Insertion-order tiebreak: SQLite's rowid, Postgres's physical row id.
+    .replace(/\browid\b/g, 'ctid');
+
+  // `?` → `$1, $2…`, skipping anything inside single-quoted strings.
+  let out = '';
+  let n = 0;
+  let inString = false;
+  for (const ch of translated) {
+    if (ch === "'") inString = !inString;
+    out += !inString && ch === '?' ? `$${++n}` : ch;
   }
-  return _client;
+  return out;
+}
+
+function pgArgs(args: InValue[]): unknown[] {
+  return args.map(a => (a === undefined ? null : typeof a === 'bigint' ? a.toString() : a));
+}
+
+export function postgresDb(driver: PgDriver): Db {
+  const prep = (stmt: InStatement) => {
+    const { sql, args } = normalize(stmt);
+    return { text: toPostgres(sql), params: pgArgs(args) };
+  };
+  const wrap = (r: { rows: any[]; rowCount: number | null }): ResultSet => ({ rows: r.rows, rowsAffected: r.rowCount ?? 0 });
+  return {
+    dialect: 'postgres',
+    async execute(stmt) {
+      const q = prep(stmt);
+      return wrap(await driver.query(q.text, q.params));
+    },
+    async batch(stmts) {
+      if (stmts.length === 0) return [];
+      return (await driver.transaction(stmts.map(prep))).map(wrap);
+    }
+  };
+}
+
+function neonDriver(url: string): PgDriver {
+  const sql = neon(url, { fullResults: true });
+  return {
+    query: (text, params) => sql.query(text, params),
+    transaction: queries => sql.transaction(queries.map(q => sql.query(q.text, q.params)))
+  };
+}
+
+function libsqlDb(client: LibsqlClient): Db {
+  const wrap = (r: any): ResultSet => ({ rows: r.rows, rowsAffected: r.rowsAffected });
+  const toLibsql = (stmt: InStatement) => {
+    const { sql, args } = normalize(stmt);
+    return { sql, args: args.map(a => (a === undefined ? null : a)) as any[] };
+  };
+  return {
+    dialect: 'sqlite',
+    async execute(stmt) {
+      return wrap(await client.execute(toLibsql(stmt)));
+    },
+    async batch(stmts, mode = 'write') {
+      return (await client.batch(stmts.map(toLibsql), mode)).map(wrap);
+    }
+  };
+}
+
+let _db: Db | null = null;
+
+/** Test hook: run the app against any Postgres driver. */
+export function useDb(db: Db): void {
+  _db = db;
+}
+
+export function getDb(): Db {
+  if (_db) return _db;
+
+  if (process.env.TURSO_DATABASE_URL) {
+    // The web client has no native code, so it bundles cleanly into functions.
+    _db = libsqlDb(createLibsqlRemote({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }));
+  } else if (process.env.NETLIFY_DATABASE_URL) {
+    _db = postgresDb(neonDriver(process.env.NETLIFY_DATABASE_URL));
+  } else if (IS_SERVERLESS) {
+    // Serverless filesystems are read-only and wiped between invocations.
+    throw new ConfigError('Database not configured. Enable Netlify DB for this site (or set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN), then redeploy.');
+  } else {
+    // Local development. Required lazily so the native SQLite binary is only
+    // loaded when actually used, never inside a deployed function.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createClient } = require('@libsql/client') as typeof import('@libsql/client');
+    _db = libsqlDb(createClient({ url: 'file:data/good_samaritan.db' }));
+  }
+  return _db;
 }
 
 export async function initDb(): Promise<void> {
@@ -228,21 +338,25 @@ export async function initDb(): Promise<void> {
   ];
   await db.batch(stmts, 'write');
 
-  // Columns added after the first release. SQLite has no ADD COLUMN IF NOT
-  // EXISTS, so check the live schema and only add what is missing.
-  const cols = await db.execute('PRAGMA table_info(users)');
-  const have = new Set(cols.rows.map((r: any) => String(r.name)));
+  // Columns added after the first release, for databases created before them.
   const additions: [string, string][] = [
     ['anonymous_mode', 'INTEGER NOT NULL DEFAULT 0'],
     ['premium_since', 'DATETIME']
   ];
+  let have = new Set<string>();
+  if (db.dialect === 'sqlite') {
+    // SQLite has no ADD COLUMN IF NOT EXISTS, so check the live schema.
+    const cols = await db.execute('PRAGMA table_info(users)');
+    have = new Set(cols.rows.map((r: any) => String(r.name)));
+  }
   for (const [name, def] of additions) {
     if (have.has(name)) continue;
+    const ifNotExists = db.dialect === 'postgres' ? 'IF NOT EXISTS ' : '';
     try {
-      await db.execute(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
+      await db.execute(`ALTER TABLE users ADD COLUMN ${ifNotExists}${name} ${def}`);
     } catch (err: any) {
       // Two cold starts can race to add the same column; that's fine.
-      if (!/duplicate column/i.test(String(err?.message))) throw err;
+      if (!/duplicate column|already exists/i.test(String(err?.message))) throw err;
     }
   }
 }

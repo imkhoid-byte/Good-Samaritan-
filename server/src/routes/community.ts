@@ -113,34 +113,33 @@ router.post('/donate', authenticate, async (req: AuthRequest, res: Response): Pr
   }
 
   const db = getDb();
-  const tx = await db.transaction('write');
+  // A single conditional UPDATE deducts points only if the balance covers
+  // them, so concurrent donations can never overspend. The records are then
+  // written together; if that fails, the points are put back.
+  const upd = await db.execute({
+    sql: 'UPDATE users SET points = points - ? WHERE id = ? AND points >= ? RETURNING points, name',
+    args: [points, req.userId!, points]
+  });
+  const user = upd.rows[0] as any;
+  if (!user) { res.status(400).json({ error: 'Not enough points' }); return; }
+
+  const cents = (points / POINTS_PER_DOLLAR) * 100;
   try {
-    const upd = await tx.execute({
-      sql: 'UPDATE users SET points = points - ? WHERE id = ? AND points >= ? RETURNING points, name',
-      args: [points, req.userId!, points]
-    });
-    if (!upd.rows[0]) {
-      await tx.rollback();
-      res.status(400).json({ error: 'Not enough points' }); return;
-    }
-    const cents = (points / POINTS_PER_DOLLAR) * 100;
-    const name = String((upd.rows[0] as any).name).split(' ')[0];
-    await tx.execute({
-      sql: 'INSERT INTO donations (id, user_id, donor_label, charity_id, cents, source) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [uuidv4(), req.userId!, name, charity.id, cents, 'points']
-    });
-    await tx.execute({
-      sql: 'INSERT INTO reward_transactions (id, user_id, amount, reason) VALUES (?, ?, ?, ?)',
-      args: [uuidv4(), req.userId!, -points, `Donated $${(cents / 100).toFixed(2)} to ${charity.name}`]
-    });
-    await tx.commit();
-    res.status(201).json({ cents, charity: charity.name, points: Number((upd.rows[0] as any).points) });
+    await db.batch([
+      {
+        sql: 'INSERT INTO donations (id, user_id, donor_label, charity_id, cents, source) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [uuidv4(), req.userId!, String(user.name).split(' ')[0], charity.id, cents, 'points']
+      },
+      {
+        sql: 'INSERT INTO reward_transactions (id, user_id, amount, reason) VALUES (?, ?, ?, ?)',
+        args: [uuidv4(), req.userId!, -points, `Donated $${(cents / 100).toFixed(2)} to ${charity.name}`]
+      }
+    ], 'write');
   } catch (err) {
-    await tx.rollback().catch(() => {});
+    await db.execute({ sql: 'UPDATE users SET points = points + ? WHERE id = ?', args: [points, req.userId!] }).catch(() => {});
     throw err;
-  } finally {
-    tx.close();
   }
+  res.status(201).json({ cents, charity: charity.name, points: Number(user.points) });
 });
 
 export default router;

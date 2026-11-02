@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { InStatement } from '@libsql/client';
-import { getDb } from '../db';
+import { getDb, InStatement } from '../db';
 import { notify } from '../notify';
 import { charityById, FINDER_MATCH_CENTS } from '../catalog';
 

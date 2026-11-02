@@ -31,6 +31,20 @@ npm run dev:server                # API on http://localhost:5000 (SQLite file in
 npm run dev:client                # web app on http://localhost:3000
 ```
 
+## Database
+
+The server picks a database from the environment, so switching needs no code change:
+
+| Set | Database |
+| --- | --- |
+| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Turso (takes priority) |
+| `NETLIFY_DATABASE_URL` (set by Netlify DB) | Netlify DB, Neon Postgres |
+| nothing, running locally | SQLite file in `server/data/` |
+
+Queries are written once in SQLite style and translated for Postgres in `server/src/db.ts`. Tables are created on the first request.
+
 ## Deploy
 
-`netlify.toml` builds the client and serves the API as a Netlify Function. Set `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `JWT_SECRET` in Netlify. Email, SMS and partner-inquiry notifications are optional; see `server/.env.example`.
+`netlify.toml` builds the client and serves the API as a Netlify Function. Enable Netlify DB for the site (or set the Turso variables) and set `JWT_SECRET`, then redeploy. Email, SMS and partner-inquiry notifications are optional; see `server/.env.example`.
+
+Moving from Netlify DB to Turso later: add the Turso variables and redeploy. Data is not copied between them automatically.

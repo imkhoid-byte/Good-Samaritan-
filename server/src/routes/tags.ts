@@ -1,7 +1,6 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { InStatement } from '@libsql/client';
-import { getDb } from '../db';
+import { getDb, InStatement } from '../db';
 import { authenticate, optionalAuth, AuthRequest } from '../middleware/auth';
 import { notify } from '../notify';
 import {
@@ -109,7 +108,7 @@ router.get('/:code', optionalAuth, async (req: AuthRequest, res: Response): Prom
     if (isClaimed && tag.status !== 'returned') {
       await db.execute({
         sql: `INSERT INTO tag_events (id, tag_code, type, cycle)
-          SELECT ?, ?, 'scanned', ? WHERE NOT EXISTS (
+          SELECT ?, ?, 'scanned', CAST(? AS INTEGER) WHERE NOT EXISTS (
             SELECT 1 FROM tag_events WHERE tag_code = ? AND type = 'scanned' AND created_at > datetime('now', '-5 minutes')
           )`,
         args: [uuidv4(), tag.code, Number(tag.cycle), tag.code]
