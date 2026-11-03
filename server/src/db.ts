@@ -5,7 +5,7 @@ import { neon } from '@neondatabase/serverless';
 // One small database interface with three backends, chosen from the environment:
 //
 //   TURSO_DATABASE_URL    → Turso (libSQL over HTTP)
-//   NETLIFY_DATABASE_URL  → Netlify DB (Neon Postgres over HTTP)
+//   NETLIFY_DATABASE_URL  → Netlify DB (Neon Postgres over HTTP); see POSTGRES_URL_VARS
 //   neither, locally      → a SQLite file in server/data/
 //
 // Queries are written once in SQLite style (`?` placeholders, CURRENT_TIMESTAMP,
@@ -115,6 +115,24 @@ function libsqlDb(client: LibsqlClient): Db {
 
 let _db: Db | null = null;
 
+// Netlify DB sets NETLIFY_DATABASE_URL. Connecting Neon another way can set
+// one of the others, so accept any of them (first match wins).
+const POSTGRES_URL_VARS = ['NETLIFY_DATABASE_URL', 'NETLIFY_DATABASE_URL_UNPOOLED', 'DATABASE_URL', 'NEON_DATABASE_URL', 'POSTGRES_URL'];
+
+function postgresUrl(): string | undefined {
+  for (const name of POSTGRES_URL_VARS) {
+    const value = process.env[name];
+    if (value && /^postgres(ql)?:\/\//.test(value)) return value;
+  }
+  return undefined;
+}
+
+// Names (never values) of database-looking settings, to make a missing
+// connection easy to diagnose from the error message alone.
+function databaseVarNames(): string[] {
+  return Object.keys(process.env).filter(k => /DATABASE|NEON|POSTGRES|TURSO|PG/i.test(k)).sort();
+}
+
 /** Test hook: run the app against any Postgres driver. */
 export function useDb(db: Db): void {
   _db = db;
@@ -126,11 +144,15 @@ export function getDb(): Db {
   if (process.env.TURSO_DATABASE_URL) {
     // The web client has no native code, so it bundles cleanly into functions.
     _db = libsqlDb(createLibsqlRemote({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }));
-  } else if (process.env.NETLIFY_DATABASE_URL) {
-    _db = postgresDb(neonDriver(process.env.NETLIFY_DATABASE_URL));
+  } else if (postgresUrl()) {
+    _db = postgresDb(neonDriver(postgresUrl()!));
   } else if (IS_SERVERLESS) {
     // Serverless filesystems are read-only and wiped between invocations.
-    throw new ConfigError('Database not configured. Enable Netlify DB for this site (or set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN), then redeploy.');
+    const seen = databaseVarNames();
+    throw new ConfigError(
+      'Database not configured. Enable Netlify DB for this site (or set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN), then redeploy. ' +
+      (seen.length ? `Database settings found: ${seen.join(', ')}.` : 'No database settings were found on this deploy.')
+    );
   } else {
     // Local development. Required lazily so the native SQLite binary is only
     // loaded when actually used, never inside a deployed function.
